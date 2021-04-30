@@ -18,27 +18,33 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 @Component
 @RequiredArgsConstructor
 public class AuthenticationFilter implements GatewayFilter {
+    private static final String AUTHORIZATION = "Authorization";
     private final RouterValidator routerValidator;
     private final JwtProvider jwtProvider;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
+
         if (routerValidator.isSecured.test(request)) {
             if (isAuthMissed(request)) {
                 return onError(exchange, UNAUTHORIZED);
             }
 
             String token = getAuthorizationHeader(request);
+
             boolean isTokenValid = jwtProvider.validateToken(token);
-            if (!isTokenValid) {
+            if (!isTokenValid)
                 return onError(exchange, UNAUTHORIZED);
-            }
 
             populateRequestWithHeaders(exchange, token);
         }
-        return null;
+        return chain.filter(exchange);
     }
+
+    // =-----------------------------------------------------
+    // Implementation
+    // =-----------------------------------------------------
 
     private void populateRequestWithHeaders(ServerWebExchange exchange, String token) {
         Claims claims = jwtProvider.getClaimsFromToken(token);
@@ -48,7 +54,10 @@ public class AuthenticationFilter implements GatewayFilter {
     }
 
     private String getAuthorizationHeader(ServerHttpRequest request) {
-        return request.getHeaders().getOrEmpty("Authorization").get(0);
+        String authHeader = request.getHeaders().getOrEmpty(AUTHORIZATION).get(0);
+        if (authHeader.startsWith("Bearer"))
+            return authHeader.replace("Bearer ", "");
+        return null;
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, HttpStatus httpStatus) {

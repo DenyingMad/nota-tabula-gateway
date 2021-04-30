@@ -19,7 +19,7 @@ public class GatewayConfig {
                         .filters(f -> f.filter(authFilter))
                         .uri("lb://TASK-SERVICE"))
                 .route("auth", p -> p
-                        .path("/auth/**")
+                        .path("/rest/security/**")
                         .filters(f -> f.filter(authFilter))
                         .uri("lb://AUTH-SERVICE")
                 )
