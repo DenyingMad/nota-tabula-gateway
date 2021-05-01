@@ -2,6 +2,8 @@ package com.devilpanda.gateway;
 
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -18,6 +20,7 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 @Component
 @RequiredArgsConstructor
 public class AuthenticationFilter implements GatewayFilter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthenticationFilter.class);
     private static final String AUTHORIZATION = "Authorization";
     private final RouterValidator routerValidator;
     private final JwtProvider jwtProvider;
@@ -27,15 +30,14 @@ public class AuthenticationFilter implements GatewayFilter {
         ServerHttpRequest request = exchange.getRequest();
 
         if (routerValidator.isSecured.test(request)) {
-            if (isAuthMissed(request)) {
-                return onError(exchange, UNAUTHORIZED);
-            }
+            if (isAuthMissed(request))
+                return onError(exchange, "Authorization Header is missing", UNAUTHORIZED);
 
             String token = getAuthorizationHeader(request);
 
             boolean isTokenValid = jwtProvider.validateToken(token);
             if (!isTokenValid)
-                return onError(exchange, UNAUTHORIZED);
+                return onError(exchange, "Authorization Token is invalid", UNAUTHORIZED);
 
             populateRequestWithHeaders(exchange, token);
         }
@@ -60,13 +62,14 @@ public class AuthenticationFilter implements GatewayFilter {
         return null;
     }
 
-    private Mono<Void> onError(ServerWebExchange exchange, HttpStatus httpStatus) {
+    private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus httpStatus) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(httpStatus);
+        LOGGER.warn("Authorization failed. Message -> {}", message);
         return response.setComplete();
     }
 
     private boolean isAuthMissed(ServerHttpRequest request) {
-        return request.getHeaders().containsKey("Authorization");
+        return !request.getHeaders().containsKey(AUTHORIZATION);
     }
 }
